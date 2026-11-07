@@ -155,7 +155,8 @@ struct RemoteServersView: View {
                     ForEach(RemotePlatform.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 180)
+                .labelsHidden()
+                .fixedSize()
                 .help("Windows için sunucuda OpenSSH ve PowerShell gerekir. Gerçek Windows sunucuda doğrulanmadı.")
                 Picker("Kimlik", selection: $form.auth) {
                     Text("Parola").tag(SSHAuth.password)
@@ -163,17 +164,22 @@ struct RemoteServersView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 220)
+                .fixedSize()
                 if form.auth == .password {
                     SecureField(form.editingId == nil ? "Parola" : "Parola (boşsa değişmez)", text: $form.password)
                 } else {
-                    TextField("Anahtar dosyası (isteğe bağlı): ~/.ssh/id_ed25519_uretim", text: $form.keyPath)
+                    TextField("Anahtar dosyası (isteğe bağlı)", text: $form.keyPath)
                         .help("Boşsa ssh-agent ve varsayılan dosya adları denenir. Yalnızca yol saklanır, anahtar içeriği saklanmaz.")
                 }
             }
             HStack(spacing: 8) {
-                TextField("İzlenecek servisler, virgülle: nginx, mariadb, postgresql", text: $form.services)
-                TextField("Yedek klasörü (isteğe bağlı): /var/backups", text: $form.backupPath)
+                TextField("Servisler: nginx, mariadb", text: $form.services)
+                    .help("İzlenecek servisler, virgülle ayrılır. Örn. nginx, mariadb, postgresql")
+                TextField("Yedek klasörü (isteğe bağlı)", text: $form.backupPath)
+                    .help("Örn. /var/backups")
+            }
+            HStack(spacing: 8) {
+                Spacer()
                 if form.editingId != nil {
                     Button("İptal") {
                         form.reset()
