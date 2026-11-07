@@ -64,7 +64,7 @@ Betik uygulamayı derler, `/Applications/Nobet.app` altına kopyalar ve açar. Y
 
 - Menü çubuğundaki dürbün simgesine tıklayın. Küçük panel açılır. Uyarı varsa simgenin yanında sayı görünür.
 - `⌥⌘N` ana pencereyi açar veya kapatır.
-- Ana pencereyi kapatınca uygulama çıkmaz. Çıkmak için panelde "Çık" veya ⌘Q kullanın.
+- Ana pencereyi kapatınca uygulama çıkmaz. ⌘Q da yalnızca pencereleri kapatır. Uygulama menü çubuğunda çalışır. Tamamen çıkmak için panelde güç düğmesini kullanın.
 
 ## Geliştirme sayfası nasıl çalışır
 

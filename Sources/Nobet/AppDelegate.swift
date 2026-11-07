@@ -52,8 +52,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     /// Ana pencere kapanınca uygulama çıkmaz. Menü çubuğu öğesi çalışmaya devam eder.
-    /// Çıkış için panelde "Çık" ya da ⌘Q kullanılır.
+    /// Gerçek çıkış için panelde "Çık" düğmesi kullanılır.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// Panelin "Çık" düğmesi bunu açar. Açıkken çıkış engellenmez.
+    static var quitRequested = false
+
+    static func quit() {
+        quitRequested = true
+        NSApp.terminate(nil)
+    }
+
+    /// ⌘Q pencereleri kapatır, uygulama menü çubuğunda çalışmaya devam eder.
+    /// Panel düğmesi, oturum kapatma, yeniden başlatma ve kapatma çıkışı engellemez.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if Self.quitRequested || Self.isSystemQuit { return .terminateNow }
+        for window in NSApp.windows where window.identifier?.rawValue.contains("main") == true { window.close() }
+        return .terminateCancel
+    }
+
+    /// Sistem kapatma, yeniden başlatma ve oturum kapatma çıkış nedeni taşır ('why?'). Menüden ⌘Q taşımaz.
+    private static let quitReasonKeyword = AEKeyword(0x7768793F) // 'why?'
+
+    private static var isSystemQuit: Bool {
+        NSAppleEventManager.shared().currentAppleEvent?.attributeDescriptor(forKeyword: Self.quitReasonKeyword) != nil
+    }
 
     /// Dock simgesine tıklanınca görünür pencere yoksa ana pencere açılır.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

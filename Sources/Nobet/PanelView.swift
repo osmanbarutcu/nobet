@@ -273,7 +273,7 @@ struct PanelView: View {
                 .help("Sunucuları şimdi oku")
                 .accessibilityLabel("Sunucuları şimdi oku")
             Spacer()
-            Button { NSApplication.shared.terminate(nil) } label: { Image(systemName: "power") }
+            Button { AppDelegate.quit() } label: { Image(systemName: "power") }
                 .glassButton()
                 .help("Nöbet'ten çık")
                 .accessibilityLabel("Çık")
