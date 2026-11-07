@@ -133,7 +133,9 @@ private struct ProjectCard: View {
             StatusDot(running: running)
             VStack(alignment: .leading, spacing: 0) {
                 Text(title).font(.caption).lineLimit(1)
-                Text(detail).font(.nobetFootnote).foregroundStyle(.secondary).lineLimit(1)
+                Text(detail).font(.nobetFootnote).foregroundStyle(.secondary).lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .help(detail)
             }
             Spacer(minLength: 6)
             Button(actionTitle) { model.request(action) }
