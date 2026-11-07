@@ -20,6 +20,8 @@ struct SettingsPage: View {
     @AppStorage(GlassDensity.key) private var glass = GlassDensity.standard
     @AppStorage(AppearanceIconStyle.key) private var iconStyle = AppearanceIconStyle.binoculars.rawValue
     @AppStorage(PanelLayout.key) private var panelLayout = PanelLayout.standard.rawValue
+    @AppStorage(UpdateCheck.enabledKey) private var updateCheckEnabled = false
+    @ObservedObject private var updates = UpdateModel.shared
     @AppStorage("history.persist") private var persistHistory = false
     @AppStorage(AlertCenter.quietEnabledKey) private var quietEnabled = true
     @AppStorage(AlertCenter.quietStartKey) private var quietStart = 23 * 60
@@ -144,6 +146,27 @@ struct SettingsPage: View {
                     }
                     Text("Sessiz saatte sorunlar yine Genel sayfasındaki geçmişe yazılır.")
                         .font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassCard()
+
+                VStack(alignment: .leading, spacing: 10) {
+                    CardHeader(symbol: "arrow.down.circle", title: "Güncellemeler", trailing: "Sürüm \(UpdateCheck.currentVersion)")
+                    Toggle("Yeni sürümü GitHub'dan denetle", isOn: $updateCheckEnabled)
+                        .toggleStyle(RightSwitchStyle())
+                        .controlSize(.small)
+                        .onChange(of: updateCheckEnabled) { _, enabled in
+                            if enabled { Task { await updates.checkIfDue() } }
+                        }
+                    if let update = updates.availableUpdate, updateCheckEnabled {
+                        Text("Yeni sürüm var: \(update.version)").font(.caption.weight(.semibold))
+                        Button("Sürüm sayfasını aç") { NSWorkspace.shared.open(update.url) }
+                            .controlSize(.small)
+                    }
+                    Text("Kapalıdır. Açarsanız Nöbet günde en çok 1 kez api.github.com adresine istek gönderir. GitHub IP adresinizi görür. Veri gönderilmez, indirme yapılmaz.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)

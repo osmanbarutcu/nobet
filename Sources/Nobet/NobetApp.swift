@@ -9,6 +9,7 @@ struct NobetApp: App {
         // ssh parola sorarken bu ikiliyi çağırır. Bu durumda parolayı yazıp çıkar, arayüz açılmaz.
         AskpassMode.runIfRequested()
         ServerModel.shared.startPolling()
+        UpdateModel.shared.startPolling()
         RemoteModel.shared.startPolling()
         if DemoMode.isOn {
             // Sahte veri kipi: gerçek diski taramaz, kısayol ve bildirim izni istemez.

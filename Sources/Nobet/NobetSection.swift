@@ -49,6 +49,7 @@ enum NotificationRoute {
         case "nobet.server": return .servers
         case "nobet.secret": return .secrets
         case "nobet.dev": return .development
+        case "nobet.update": return .settings
         default: return nil
         }
     }

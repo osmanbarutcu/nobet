@@ -6,6 +6,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func applicationDidFinishLaunching(_ notification: Notification) {
         if Bundle.main.bundleIdentifier != nil { UNUserNotificationCenter.current().delegate = self }
         NotificationAction.register()
+        // Pencere açılınca Dock simgesi geri gelir. Menü çubuğuna inmişken simge gizlidir.
+        NotificationCenter.default.addObserver(forName: .nobetOpenMain, object: nil, queue: .main) { _ in
+            NSApp.setActivationPolicy(.regular)
+        }
         KeychainDiag.runIfRequested()
         // Geliştirme: NOBET_DIAG_CLOSE_MAIN=1 ana pencereyi 3 sn sonra kapatır. Uygulamanın yaşayıp yaşamadığını sınar.
         if ProcessInfo.processInfo.environment["NOBET_DIAG_CLOSE_MAIN"] != nil {
@@ -63,11 +67,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         NSApp.terminate(nil)
     }
 
-    /// ⌘Q pencereleri kapatır, uygulama menü çubuğunda çalışmaya devam eder.
+    /// ⌘Q pencereleri kapatır, Dock simgesini gizler. Uygulama menü çubuğunda çalışmaya devam eder.
     /// Panel düğmesi, oturum kapatma, yeniden başlatma ve kapatma çıkışı engellemez.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if Self.quitRequested || Self.isSystemQuit { return .terminateNow }
         for window in NSApp.windows where window.identifier?.rawValue.contains("main") == true { window.close() }
+        NSApp.setActivationPolicy(.accessory)
         return .terminateCancel
     }
 
