@@ -45,7 +45,15 @@ Normal uygulamada kip kapalıdır.
 - macOS 15 veya üstü. Liquid Glass görünümü macOS 26 ve üstünde çalışır.
 - Swift 6 araçları (Command Line Tools yeterlidir, Xcode gerekmez).
 
-## Kurulum
+## İndirme
+
+[Releases](https://github.com/osmanbarutcu/nobet/releases) sayfasından `Nobet-<sürüm>.dmg` dosyasını indirin.
+
+1. DMG'yi açın. Nobet'i Applications klasörüne sürükleyin.
+2. Uygulama notarize değildir. İlk açılışta sağ tıklayın, "Aç" seçin.
+3. Sağlama için `.sha256` dosyasını kullanın: `shasum -a 256 -c Nobet-<sürüm>.dmg.sha256`
+
+## Kurulum (kaynaktan)
 
 1. Depoyu açın: `cd nobet`
 2. Kurun: `./install.sh`

@@ -24,11 +24,13 @@ struct MainWindowView: View {
             set: { storedSection = ($0 ?? .general).rawValue }
         )
         NavigationSplitView {
-            List(NobetSection.allCases, selection: selection) { section in
-                Label(section.rawValue, systemImage: section.symbol)
-                    .tag(section)
-                    .badge(badgeCount(section))
-                    .badgeProminence(.increased)
+            List(selection: selection) {
+                ForEach(NobetSection.allCases) { section in
+                    Label(section.rawValue, systemImage: section.symbol)
+                        .badge(badgeCount(section))
+                        .badgeProminence(.increased)
+                        .tag(section)
+                }
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
         } detail: {
