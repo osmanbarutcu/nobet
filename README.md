@@ -17,7 +17,7 @@ Tüm görüntüler sahte veriyle üretildi. Alan adları `example.*` adresleridi
 | ![Web sitesi kartları](docs/screenshots/sunucular-acik.png) | ![SSH sunucu kartları, koyu tema](docs/screenshots/sunucular-ssh-koyu.png) |
 
 ![Ayarlar sayfası](docs/screenshots/ayarlar-acik.png)
-
+![Menü çubuğu paneli](docs/screenshots/panel-acik.png)
 ### Demo kipi
 
 `scripts/demo.sh` sahte veriyle çalışan ayrı bir kopya açar. Kopya `local.nobet.demo` paket kimliğini kullanır.
