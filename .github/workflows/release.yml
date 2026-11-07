@@ -1,0 +1,41 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+# Release oluşturmak için yazma izni gerekir. Başka iş akışında bu izin yoktur.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Testler
+        run: swift test
+      - name: Uygulamayı derle
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # CI'da sertifika yoktur. make-app.sh ad-hoc imza kullanır.
+          NOBET_VERSION="${TAG#v}" ./make-app.sh
+      - name: Paketleri üret
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          ./scripts/make-dmg.sh
+          mkdir -p dist
+          ditto -c -k --keepParent Nobet.app "dist/Nobet-$VERSION-macos.zip"
+          (cd dist && shasum -a 256 "Nobet-$VERSION-macos.zip" > "Nobet-$VERSION-macos.zip.sha256")
+      - name: Release oluştur
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/Nobet-*.dmg dist/Nobet-*.zip dist/*.sha256 \
+            --title "Nobet ${TAG#v}" \
+            --notes "Ad-hoc imzalı, notarize edilmemiş sürüm. İlk açılışta sağ tık > Aç gerekir. SHA-256 dosyaları eklidir."
