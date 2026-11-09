@@ -1,9 +1,16 @@
 import AppKit
 import SwiftUI
 
-/// Sır tarayıcı: yerel dosyalardaki riskli izinleri ve açıkta kalan sırları listeler. Dosyaları değiştirmez.
+/// `@State` bu araç zincirinde derlenmez. Bu yüzden sheet durumu küçük bir nesnede durur.
+private final class SecretsPageState: ObservableObject {
+    @Published var editing: SecretFinding?
+}
+
+/// Sır tarayıcı: yerel dosyalardaki riskli izinleri ve açıkta kalan sırları listeler.
+/// Dosyayı yalnızca kullanıcı `.env` bulgusunda Düzenle deyip onaylarsa değiştirir.
 struct SecretsPage: View {
     @ObservedObject var model: SecretsModel
+    @StateObject private var state = SecretsPageState()
 
     var body: some View {
         PageContainer {
@@ -14,7 +21,8 @@ struct SecretsPage: View {
                                message: "Taranan yerlerde riskli dosya bulunamadı. Başka bir klasörü taramak için Klasör ekle düğmesini kullanın.")
                 }
                 ForEach(model.findings) { finding in
-                    FindingCard(finding: finding, actionTitle: "Yok say") { model.ignore(finding) }
+                    FindingCard(finding: finding, actionTitle: "Yok say", action: { model.ignore(finding) },
+                                onEdit: SecretEditor.canEdit(finding) ? { state.editing = finding } : nil)
                 }
                 if !model.ignoredFindings.isEmpty {
                     Text("Yok sayılanlar (\(model.ignoredFindings.count))").font(.callout.weight(.medium)).padding(.top, 8)
@@ -25,6 +33,14 @@ struct SecretsPage: View {
                 }
         }
         .onAppear { if !model.scanned { model.rescan() } }
+        .sheet(item: $state.editing) { finding in
+            EnvEditorSheet(path: finding.path) {
+                model.didEdit(path: finding.path)
+                state.editing = nil
+            } onClose: {
+                state.editing = nil
+            }
+        }
     }
 
     private var header: some View {
@@ -40,10 +56,17 @@ struct SecretsPage: View {
                     .help("Yeniden tara")
                     .accessibilityLabel("Yeniden tara")
             }
-            Text("Nöbet yalnızca okur. Sır değerini göstermez, kaydetmez ve dosyaları değiştirmez. Düzeltme komutunu siz çalıştırırsınız.")
+            Text("Nöbet taramada yalnızca okur. Sır değerini listede göstermez ve kaydetmez. Dosyayı yalnızca .env bulgusunda Düzenle deyip onaylarsanız değiştirir. Diğer düzeltme komutlarını siz çalıştırırsınız.")
                 .font(.nobetFootnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if let notice = model.notice {
+                HStack(spacing: 8) {
+                    Text(verbatim: notice).font(.caption).foregroundStyle(.green)
+                    Spacer(minLength: 6)
+                    Button("Tamam") { model.dismissNotice() }.buttonStyle(.link).font(.caption)
+                }
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -103,6 +126,7 @@ private struct FindingCard: View {
     let finding: SecretFinding
     let actionTitle: String
     let action: () -> Void
+    var onEdit: (() -> Void)?
     @StateObject private var copy = CopyFlag()
 
     var body: some View {
@@ -113,6 +137,7 @@ private struct FindingCard: View {
                     .foregroundStyle(color)
                 Text(finding.kind.title).font(.callout.weight(.medium))
                 Spacer()
+                if let onEdit { Button("Düzenle", action: onEdit).buttonStyle(.link).font(.caption) }
                 Button(actionTitle, action: action).buttonStyle(.link).font(.caption)
             }
             Text(verbatim: (finding.path as NSString).abbreviatingWithTildeInPath)

@@ -166,3 +166,18 @@ struct SecretsModelTests {
         #expect(!model.scanning)
     }
 }
+
+struct SecretsModelEditNoticeTests {
+    @Test @MainActor func editNoticeNamesFolderAndFileOnly() {
+        let name = "nobet-test-\(UUID().uuidString)"
+        let defaults = TestDefaults.make(name)
+        defaults.removePersistentDomain(forName: name)
+        let empty = FileManager.default.temporaryDirectory.appendingPathComponent("nobet-notice-\(UUID().uuidString)").path
+        let model = SecretsModel(nobet: NobetModel(), defaults: defaults, home: empty)
+        model.didEdit(path: "/Users/test/proje/.env")
+        #expect(model.notice == "proje/.env kaydedildi.")
+        #expect(model.notice?.contains("/Users") == false)
+        model.dismissNotice()
+        #expect(model.notice == nil)
+    }
+}

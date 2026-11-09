@@ -18,6 +18,8 @@ final class SecretsModel: ObservableObject {
     @Published private(set) var scanned = false
     @Published private(set) var folders: [String]
     @Published private(set) var errorText: String?
+    /// Son düzenleme sonucu. Yalnızca üst klasör ve dosya adı içerir. Değer içermez.
+    @Published private(set) var notice: String?
 
     private let nobet: NobetModel
     private let defaults: UserDefaults
@@ -95,6 +97,14 @@ final class SecretsModel: ObservableObject {
             scanning = false
         }
     }
+
+    /// Dosya düzenlendi. Sonuç değişmiş olabileceği için yeniden tarar.
+    func didEdit(path: String) {
+        notice = "\(Self.subject(for: path)) kaydedildi."
+        rescan()
+    }
+
+    func dismissNotice() { notice = nil }
 
     /// Tarama pahalıdır. Uygulama açıkken 15 dakikada bir çalışır. İkinci çağrı bir şey yapmaz.
     func startPolling(every seconds: UInt64 = 900) {
