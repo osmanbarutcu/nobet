@@ -6,6 +6,7 @@ extension AlertIssue {
     var routeIdentifier: String {
         switch module {
         case "secrets": return "nobet.secret"
+        case "net": return "nobet.net"
         case "dev", "sbom": return "nobet.dev"
         default: return "nobet.server"
         }

@@ -16,6 +16,10 @@ Tüm görüntüler sahte veriyle üretildi. Alan adları `example.*` adresleridi
 |---|---|
 | ![Web sitesi kartları](docs/screenshots/sunucular-acik.png) | ![SSH sunucu kartları, koyu tema](docs/screenshots/sunucular-ssh-koyu.png) |
 
+| Ağ (açık) | Ağ (koyu) |
+|---|---|
+| ![Ağ sayfası, açık tema](docs/screenshots/ag-acik.png) | ![Ağ sayfası, koyu tema](docs/screenshots/ag-koyu.png) |
+
 ![Ayarlar sayfası](docs/screenshots/ayarlar-acik.png)
 ![Menü çubuğu paneli](docs/screenshots/Screenshot%202026-11-07%20at%2020-32-24.jpg)
 ### Demo kipi
@@ -38,6 +42,7 @@ Normal uygulamada kip kapalıdır.
 | Geliştirme | Çalışıyor | Docker/OrbStack konteynerleri, DDEV siteleri ve dinleyen portlar proje başına. Durdur, başlat ve sonlandır düğmeleri onay ister. Ağa açık proje portu menü çubuğunda uyarı sayısı olur |
 | Sunucular | Çalışıyor | Dış kontrol: HTTP durumu, yanıt süresi, SSL bitiş tarihi. DNS, port ve zaman aşımı hatası ayrı bildirilir. SSH ile Linux sunucu: disk, bellek, yük, açık kalma süresi, servisler, sshd sertleştirme (root girişi, parola girişi, fail2ban), dışa açık portlar, Docker konteynerleri, veritabanı yanıtı, yedek tazeliği ve son 24 saatin çizgileri. Her kartta Düzenle düğmesi ve sunucu başına eşik vardır. Parola veya anahtar: parola yalnızca Anahtar Zincirinde durur. Windows yapılmadı |
 | Sırlar | Hazır | `.env`, SSH anahtarı ve token dosyalarını tarar. Değer göstermez. Düzeltme komutunu önerir, çalıştırmaz |
+| Ağ | Çalışıyor | Dinleyen TCP süreçlerini, ikili dosya imzasını (Apple, geliştirici, ad-hoc, imzasız) ve kurulmuş bağlantıları gösterir. Uyarı kuralları: yeni dinleyen süreç, ağa açık sistem portu, ağa açık imzasız süreç, geçici veya İndirilenler klasöründen çalışan süreç. İlk tarama mevcut durumu sessizce öğrenir. Güvenilir işaretleme ve onaylı süreç sonlandırma vardır. Bağlantı engellemez. Proje portları Geliştirme'de kalır. Bağlantı listesi yalnızca sayfa açıkken okunur ve diske yazılmaz. Kısayol ⌘5 |
 | Ayarlar | Çalışıyor | Kısayol ⌥⌘N, bildirimler, sessiz saatler (varsayılan 23:00–08:00), girişte başlatma |
 
 ## Gereksinimler
@@ -74,8 +79,20 @@ Betik uygulamayı derler, `/Applications/Nobet.app` altına kopyalar ve açar. Y
 - Sistem süreçleri (PID 1) ve Nöbet'in kendisi sonlandırılamaz. Yönetici yetkisi gerektiren süreç sonlanmaz.
 - Okuma 60 saniyede bir yenilenir.
 
+## Ağ sayfası nasıl çalışır
+
+- Dinleyen portlar `lsof` ile 60 saniyede bir okunur. Süreç numarasından ikili dosya yolu (`proc_pidpath`) ve kod imzası (Security çerçevesi) bulunur. İmza sonucu dosya yoluna ve değişiklik zamanına göre saklanır.
+- Dört kural uyarı üretir: yeni dinleyen süreç, ağa açık sistem portu, ağa açık imzasız süreç ve şüpheli klasörden çalışan süreç. Şüpheli klasör: `/tmp`, `/private/var/folders`, `Downloads` ve tanınmayan gizli klasör.
+- Ad-hoc imza tek başına uyarı üretmez. Homebrew ikilileri ve Nöbet'in kendisi ad-hoc imzalıdır.
+- Proje portları (çalışma klasörü bir projede) bu sayfada uyarı üretmez. Geliştirme sayfası onları zaten uyarır.
+- Taban çizgisi süreç yolunu ve kapsamı (yerel, ağ arayüzü, tüm ağ) izler. Port numarasını izlemez. Birçok uygulama her açılışta rastgele port seçer.
+- İlk tarama mevcut durumu sessizce öğrenir. Sonra yeni bir süreç dinlemeye başlarsa uyarı gelir. Güvenilir işaretlenen süreç hiçbir kuralı tetiklemez.
+- Süreç sonlandırma `SIGTERM` gönderir ve onay ister. Apple sistem süreci için onay penceresi ek uyarı gösterir.
+- Kurulmuş bağlantılar yalnızca sayfa açıkken 10 saniyede bir okunur. Liste diske yazılmaz.
+
 ## Güvenlik ilkeleri
 
+- Ağ sayfası yalnızca okur. Taban çizgisi yalnızca özet değerleri saklar. Yol, süreç adı ve IP diske yazılmaz.
 - Parola ve özel anahtar yalnızca macOS Anahtar Zinciri'nde durur. Uygulama klasöründe veya ayar dosyasında bulunmaz.
 - Sunucularda yalnızca salt okunur komutlar çalışır. Betik bir testle denetlenir: `rm`, `sudo`, yazma yönlendirmesi ve servis durdurma yasaktır.
 - Bildirim metni yol, anahtar adı veya sunucu çıktısı taşımaz. Geçmiş olayları yalnızca başlık ve konu saklar.
@@ -92,6 +109,10 @@ Betik uygulamayı derler, `/Applications/Nobet.app` altına kopyalar ve açar. Y
 - Notarization yapılmaz. Başka bir Mac'te Gatekeeper uyarı verebilir.
 - Otomatik güncelleme yok. Yeni sürümü elle kurun.
 - Önerilen komutlar (sshd, fail2ban, chmod) yalnızca metindir. Nöbet bunları çalıştırmaz.
+- Ağ sayfası bağlantı engellemez. Engelleme `NetworkExtension` ve Developer ID imzası gerektirir. Yapılmadı.
+- Ağ sayfası yönetici yetkisi olmadan yalnızca sizin süreçlerinizi görür. Yönetici (root) servisleri listelenmez.
+- Zararlı bir süreç ilk taramadan önce çalışıyorsa taban çizgisi onu "bilinen" öğrenir. Şüpheli klasör ve imza kuralları bu süreci yine yakalar. Taban çizgisini sıfırlayarak yeniden öğretebilirsiniz.
+- Bilinen bir süreç yeni bir porta geçerse yeni sayılmaz. Taban çizgisi port izlemez.
 
 ## Geliştirme
 

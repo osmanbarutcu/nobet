@@ -71,6 +71,43 @@ enum DemoMode {
         center.ingest(module: "secrets", issues: secrets)
         nobet.setAlerts(dev.count, for: "dev")
         nobet.setAlerts(secrets.count, for: "secrets")
+        // Ağ modülü iki adımda beslenir: önce taban çizgisi öğrenilir, sonra yeni dinleyenler gelir.
+        NetworkModel.shared.apply(networkSnapshot(includeNew: false))
+        NetworkModel.shared.apply(networkSnapshot(includeNew: true))
+    }
+
+    /// Ağ sayfası için sahte dinleyenler ve bağlantılar. Uzak adresler belgelendirme aralıklarındandır (RFC 5737).
+    /// Yollar gerçek bir kullanıcı klasörüne işaret etmez. `includeNew` öğrenmeden sonra beliren süreçleri ekler.
+    static func networkSnapshot(includeNew: Bool) -> NetworkSnapshot {
+        func listener(_ process: String, pid: Int, port: Int, scope: ListeningPort.Scope, path: String,
+                      signature: SignatureStatus, suspicious: Bool = false, project: Bool = false) -> NetworkListener {
+            NetworkListener(
+                port: ListeningPort(pid: pid, process: process, address: scope == .local ? "127.0.0.1" : "*", port: port, scope: scope),
+                identity: ProcessIdentity(path: path, signature: signature, suspiciousLocation: suspicious),
+                isProjectPort: project)
+        }
+        let learned = [
+            listener("ControlCenter", pid: 901, port: 7000, scope: .all,
+                     path: "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter", signature: .apple),
+            listener("ollama", pid: 1079, port: 11434, scope: .local,
+                     path: "/opt/homebrew/Cellar/ollama/1.0.0/libexec/ollama", signature: .adHoc),
+            listener("node", pid: 4101, port: 3000, scope: .all, path: "/opt/homebrew/bin/node", signature: .adHoc, project: true),
+        ]
+        let arrived = includeNew ? [
+            listener("syncd", pid: 5501, port: 8384, scope: .all,
+                     path: "/Applications/Sync.app/Contents/MacOS/syncd", signature: .developer),
+            listener("updater-helper", pid: 6602, port: 49321, scope: .interface,
+                     path: "/private/var/folders/zz/demo/T/updater-helper", signature: .unsigned, suspicious: true),
+        ] : []
+        let connections = [
+            NetworkConnection(pid: 701, process: "Safari", localPort: 50101, remoteHost: "203.0.113.10", remotePort: 443),
+            NetworkConnection(pid: 701, process: "Safari", localPort: 50102, remoteHost: "203.0.113.10", remotePort: 443),
+            NetworkConnection(pid: 702, process: "Mail", localPort: 50210, remoteHost: "198.51.100.25", remotePort: 993),
+            NetworkConnection(pid: 5501, process: "syncd", localPort: 50305, remoteHost: "192.0.2.44", remotePort: 22000),
+            NetworkConnection(pid: 705, process: "Finder", localPort: 50520, remoteHost: "10.0.0.8", remotePort: 445),
+            NetworkConnection(pid: 4101, process: "node", localPort: 50411, remoteHost: "127.0.0.1", remotePort: 5432),
+        ]
+        return NetworkSnapshot(listeners: learned + arrived, connections: connections)
     }
 
     // MARK: - Üretilen geçmiş

@@ -1,9 +1,9 @@
 import Foundation
 
 enum ModuleNames {
-    static let order = ["dev", "servers", "remote", "secrets", "sbom"]
+    static let order = ["dev", "servers", "remote", "secrets", "net", "sbom"]
     private static let titles = ["dev": "Geliştirme", "servers": "Web siteleri", "remote": "SSH sunucuları", "secrets": "Sırlar",
-                                 "sbom": "Bağımlılıklar"]
+                                 "net": "Ağ", "sbom": "Bağımlılıklar"]
 
     static func title(_ key: String) -> String { titles[key] ?? key }
 
@@ -13,6 +13,7 @@ enum ModuleNames {
         case "servers": return "globe"
         case "remote": return "server.rack"
         case "secrets": return "key.viewfinder"
+        case "net": return "network"
         case "sbom": return "shippingbox"
         default: return "questionmark.circle"
         }
@@ -24,6 +25,7 @@ enum ModuleNames {
         case "dev", "sbom": return .development
         case "servers", "remote": return .servers
         case "secrets": return .secrets
+        case "net": return .network
         default: return .general
         }
     }

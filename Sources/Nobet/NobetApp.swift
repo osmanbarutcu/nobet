@@ -21,6 +21,7 @@ struct NobetApp: App {
         SystemAlertNotifier().requestAuthorization()
         DevModel.shared.startPolling()
         SecretsModel.shared.startPolling()
+        NetworkModel.shared.startPolling()
     }
 
     var body: some Scene {

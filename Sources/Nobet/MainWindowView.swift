@@ -11,7 +11,7 @@ struct MainWindowView: View {
     private func badgeCount(_ section: NobetSection) -> Int {
         switch section {
         case .general: return center.visibleActive.count
-        case .development, .servers, .secrets:
+        case .development, .servers, .secrets, .network:
             return ModuleNames.order.filter { ModuleNames.section($0) == section }.reduce(0) { $0 + center.visibleCount(module: $1) }
         case .settings, .about: return 0
         }
@@ -69,6 +69,8 @@ struct SectionPage: View {
             ServersPage(model: ServerModel.shared)
         case .secrets:
             SecretsPage(model: SecretsModel.shared)
+        case .network:
+            NetworkPage(model: NetworkModel.shared)
         case .general:
             GeneralPage(center: AlertCenter.shared, model: model)
         case .settings:

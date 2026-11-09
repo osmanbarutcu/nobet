@@ -13,18 +13,20 @@ enum NobetSection: String, CaseIterable, Identifiable {
     case development = "Geliştirme"
     case servers = "Sunucular"
     case secrets = "Sırlar"
+    case network = "Ağ"
     case settings = "Ayarlar"
     case about = "Hakkında"
 
     var id: String { rawValue }
 
-    /// ⌘1 ... ⌘4 ve Ayarlar için ⌘0.
+    /// ⌘1 ... ⌘5 ve Ayarlar için ⌘0.
     var shortcut: KeyEquivalent? {
         switch self {
         case .general: return "1"
         case .development: return "2"
         case .servers: return "3"
         case .secrets: return "4"
+        case .network: return "5"
         case .settings: return "0"
         case .about: return nil
         }
@@ -36,6 +38,7 @@ enum NobetSection: String, CaseIterable, Identifiable {
         case .development: return "hammer"
         case .servers: return "server.rack"
         case .secrets: return "key.viewfinder"
+        case .network: return "network"
         case .settings: return "gearshape"
         case .about: return "info.circle"
         }
@@ -49,6 +52,7 @@ enum NotificationRoute {
         case "nobet.server": return .servers
         case "nobet.secret": return .secrets
         case "nobet.dev": return .development
+        case "nobet.net": return .network
         case "nobet.update": return .settings
         default: return nil
         }

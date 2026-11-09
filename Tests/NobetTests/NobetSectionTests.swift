@@ -6,7 +6,7 @@ import Testing
 struct NobetSectionTests {
     @Test func sectionsAreInSidebarOrder() {
         let names = NobetSection.allCases.map(\.rawValue)
-        #expect(names == ["Genel", "Geliştirme", "Sunucular", "Sırlar", "Ayarlar", "Hakkında"])
+        #expect(names == ["Genel", "Geliştirme", "Sunucular", "Sırlar", "Ağ", "Ayarlar", "Hakkında"])
     }
 
     @Test func shortcutsAreUnique() {
@@ -18,11 +18,19 @@ struct NobetSectionTests {
         #expect(NobetSection.settings.shortcut?.character == "0")
         #expect(NobetSection.general.shortcut?.character == "1")
         #expect(NobetSection.secrets.shortcut?.character == "4")
+        #expect(NobetSection.network.shortcut?.character == "5")
+    }
+
+    @Test func networkSectionHasItsOwnSymbol() {
+        #expect(NobetSection.network.symbol == "network")
+        let symbols = NobetSection.allCases.map(\.symbol)
+        #expect(Set(symbols).count == symbols.count)
     }
 
     @Test func notificationIdentifiersRouteToSections() {
         #expect(NotificationRoute.section(for: "nobet.server") == .servers)
         #expect(NotificationRoute.section(for: "nobet.secret") == .secrets)
+        #expect(NotificationRoute.section(for: "nobet.net") == .network)
         #expect(NotificationRoute.section(for: "bilinmeyen") == nil)
     }
 }

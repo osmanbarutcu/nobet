@@ -78,7 +78,7 @@ enum PortScan {
     static func exposedCount(_ ports: [ListeningPort]) -> Int { ports.filter { $0.scope == .all }.count }
 
     /// "*:7000", "127.0.0.1:11434", "[::1]:3000". Port sayı değilse nil döner.
-    private static func endpoint(_ text: String) -> (host: String, port: Int)? {
+    static func endpoint(_ text: String) -> (host: String, port: Int)? {
         guard let colon = text.lastIndex(of: ":"), let port = Int(text[text.index(after: colon)...]) else { return nil }
         var host = String(text[..<colon])
         if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }

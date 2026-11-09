@@ -250,6 +250,13 @@ struct ModuleSectionTests {
         #expect(ModuleNames.section("servers") == .servers)
         #expect(ModuleNames.section("remote") == .servers)
         #expect(ModuleNames.section("secrets") == .secrets)
+        #expect(ModuleNames.section("net") == .network)
+    }
+
+    @Test func networkModuleIsListedWithATitle() {
+        #expect(ModuleNames.order.contains("net"))
+        #expect(ModuleNames.title("net") == "Ağ")
+        #expect(ModuleNames.symbol("net") == "network")
     }
 
     @Test func unknownModuleFallsBackToGeneral() {

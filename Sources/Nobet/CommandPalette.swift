@@ -14,6 +14,7 @@ enum CommandPalette {
         PaletteEntry(section: .development, keywords: ["docker", "port", "bağımlılık", "sbom", "git"]),
         PaletteEntry(section: .servers, keywords: ["ssh", "site", "sertifika", "uptime", "sunucu"]),
         PaletteEntry(section: .secrets, keywords: ["parola", "anahtar", "token", "env"]),
+        PaletteEntry(section: .network, keywords: ["bağlantı", "dinleyen", "süreç", "imza", "güvenlik duvarı"]),
         PaletteEntry(section: .settings, keywords: ["tema", "renk", "bildirim", "ses", "görünüm"]),
         PaletteEntry(section: .about, keywords: ["sürüm", "tanılama", "rapor"]),
     ]

@@ -9,6 +9,33 @@ struct DemoModeTests {
         #expect(DemoMode.isOn == false)
     }
 
+    @Test("Ağ demo verisi yalnızca belgelendirme adresleri kullanır")
+    func networkFixturesUseDocumentationAddresses() {
+        let hosts = (DemoMode.networkSnapshot(includeNew: true).connections ?? []).map(\.remoteHost)
+        #expect(!hosts.isEmpty)
+        let allowed = ["192.0.2.", "198.51.100.", "203.0.113.", "10.", "127."]
+        #expect(hosts.allSatisfy { host in allowed.contains { host.hasPrefix($0) } })
+    }
+
+    @Test("Ağ demo verisi öğrenmeden sonra yeni ve riskli dinleyici gösterir")
+    func networkFixturesShowRisksAfterLearning() {
+        let base = DemoMode.networkSnapshot(includeNew: false)
+        let full = DemoMode.networkSnapshot(includeNew: true)
+        #expect(full.listeners.count > base.listeners.count)
+        let learned = NetworkBaseline.empty.observing(Set(base.listeners.filter { !$0.isProjectPort }.map(\.digest))).baseline
+        let newKeys = learned.observing(Set(full.listeners.filter { !$0.isProjectPort }.map(\.digest))).newKeys
+        let issues = NetworkRules.alertIssues(full.listeners, newKeys: newKeys, trusted: [])
+        #expect(issues.contains { $0.severity == .high })
+        #expect(issues.contains { $0.title == "Yeni dinleyen süreç" })
+        #expect(NetworkRules.alertIssues(base.listeners, newKeys: [], trusted: []).allSatisfy { $0.severity != .high })
+    }
+
+    @Test("Ağ demo verisi gerçek bir kullanıcı klasörü içermez")
+    func networkFixturesLeakNoRealPaths() {
+        let paths = DemoMode.networkSnapshot(includeNew: true).listeners.compactMap(\.identity.path)
+        #expect(!paths.contains { $0.hasPrefix(NSHomeDirectory()) })
+    }
+
     @Test("Örnek profil ve siteler geçerlidir ve gerçek alan adı içermez")
     func fixturesAreValidAndFake() {
         #expect(DemoMode.profiles.count == 3)

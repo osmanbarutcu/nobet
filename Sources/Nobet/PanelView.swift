@@ -19,6 +19,7 @@ struct PanelView: View {
         ("servers", "Web siteleri", "globe"),
         ("remote", "SSH sunucuları", "server.rack"),
         ("secrets", "Sırlar", "key.viewfinder"),
+        ("net", "Ağ", "network"),
         ("sbom", "Bağımlılıklar", "shippingbox"),
     ]
 

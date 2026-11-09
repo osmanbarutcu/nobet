@@ -18,6 +18,12 @@ struct CommandPaletteTests {
         #expect(CommandPalette.matches("tema").map(\.section) == [.settings])
     }
 
+    @Test func networkPageIsFoundByItsNameAndKeywords() {
+        #expect(CommandPalette.matches("AG").map(\.section).contains(.network))
+        #expect(CommandPalette.matches("baglanti").map(\.section) == [.network])
+        #expect(CommandPalette.matches("imza").map(\.section) == [.network])
+    }
+
     @Test func unknownQueryGivesNothing() {
         #expect(CommandPalette.matches("zzzz").isEmpty)
     }
