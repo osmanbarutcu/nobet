@@ -41,7 +41,7 @@ Normal uygulamada kip kapalıdır.
 | Genel | Çalışıyor | Modül durumu, açık sorunlar ve son 20 olay. Yeni sorunda ve düzelmede bildirim gönderir |
 | Geliştirme | Çalışıyor | Docker/OrbStack konteynerleri, DDEV siteleri ve dinleyen portlar proje başına. Durdur, başlat ve sonlandır düğmeleri onay ister. Ağa açık proje portu menü çubuğunda uyarı sayısı olur |
 | Sunucular | Çalışıyor | Dış kontrol: HTTP durumu, yanıt süresi, SSL bitiş tarihi. DNS, port ve zaman aşımı hatası ayrı bildirilir. SSH ile Linux sunucu: disk, bellek, yük, açık kalma süresi, servisler, sshd sertleştirme (root girişi, parola girişi, fail2ban), dışa açık portlar, Docker konteynerleri, veritabanı yanıtı, yedek tazeliği ve son 24 saatin çizgileri. Her kartta Düzenle düğmesi ve sunucu başına eşik vardır. Parola veya anahtar: parola yalnızca Anahtar Zincirinde durur. Windows yapılmadı |
-| Sırlar | Hazır | `.env`, SSH anahtarı ve token dosyalarını tarar. Değer göstermez. Düzeltme komutunu önerir, çalıştırmaz |
+| Sırlar | Hazır | `.env`, SSH anahtarı ve token dosyalarını tarar. Listede değer göstermez. `.env` bulgusunda Düzenle düğmesi dosyayı satır satır düzenler: değerler gizli, kayıt modal onay ister. Diğer düzeltmeler için komut önerir, çalıştırmaz |
 | Ağ | Çalışıyor | Dinleyen TCP süreçlerini, ikili dosya imzasını (Apple, geliştirici, ad-hoc, imzasız) ve kurulmuş bağlantıları gösterir. Uyarı kuralları: yeni dinleyen süreç, ağa açık sistem portu, ağa açık imzasız süreç, geçici veya İndirilenler klasöründen çalışan süreç. İlk tarama mevcut durumu sessizce öğrenir. Güvenilir işaretleme ve onaylı süreç sonlandırma vardır. Bağlantı engellemez. Proje portları Geliştirme'de kalır. Bağlantı listesi yalnızca sayfa açıkken okunur ve diske yazılmaz. Kısayol ⌘5 |
 | Ayarlar | Çalışıyor | Kısayol ⌥⌘N, bildirimler, sessiz saatler (varsayılan 23:00–08:00), girişte başlatma |
 
@@ -90,6 +90,14 @@ Betik uygulamayı derler, `/Applications/Nobet.app` altına kopyalar ve açar. Y
 - Süreç sonlandırma `SIGTERM` gönderir ve onay ister. Apple sistem süreci için onay penceresi ek uyarı gösterir.
 - Kurulmuş bağlantılar yalnızca sayfa açıkken 10 saniyede bir okunur. Liste diske yazılmaz.
 
+## SBOM ve açık izleme
+
+- Geliştirme sayfasındaki SBOM kartı `package-lock.json`, `composer.lock`, `Package.resolved` ve `requirements.txt` dosyalarını okur. CycloneDX 1.5 dışa aktarımı vardır.
+- "Bilinen açıkları sorgula (OSV.dev)" varsayılan kapalıdır. Açıkken ekosistem, paket adı ve sürüm internete gider. Önem derecesi için açık kimliği de gider (en çok 50). Dosya yolu gitmez. Swift paketleri sorgulanmaz.
+- Sorgu açıksa Nöbet açılışından 30 sn sonra, sonra 6 saatte bir kendiliğinden tarar. Sorgu kapalıysa ağa çıkmaz.
+- Önceki taramada olmayan açıklı bileşen satırda "Yeni" görünür. İlk tarama mevcut durumu sessizce öğrenir. Diske yalnızca özet değerleri yazılır.
+- Yüksek ve kritik açık yüksek önemli uyarı üretir. Diğerleri orta önemlidir. Düzeltme sürümü bilinirse uyarı konusuna eklenir.
+
 ## Güvenlik ilkeleri
 
 - Ağ sayfası yalnızca okur. Taban çizgisi yalnızca özet değerleri saklar. Yol, süreç adı ve IP diske yazılmaz.
@@ -97,7 +105,9 @@ Betik uygulamayı derler, `/Applications/Nobet.app` altına kopyalar ve açar. Y
 - Sunucularda yalnızca salt okunur komutlar çalışır. Betik bir testle denetlenir: `rm`, `sudo`, yazma yönlendirmesi ve servis durdurma yasaktır.
 - Bildirim metni yol, anahtar adı veya sunucu çıktısı taşımaz. Geçmiş olayları yalnızca başlık ve konu saklar.
 - SSH anahtarı `ssh-agent` üzerinden kullanılır. Nöbet gizli anahtar dosyasını okumaz.
-- Sır tarayıcı değerleri maskeler, kaydetmez ve dosyayı değiştirmez.
+- Sır tarayıcı değerleri listede göstermez ve kaydetmez. Tarama dosyayı değiştirmez. Dosyayı yalnızca `.env` düzenleme penceresi değiştirir.
+- `.env` düzenleme: yalnızca düz `.env*` dosyası, en çok 256 KB, UTF-8. Sembolik bağlantı reddedilir. Değerler bellekte durur, pencere kapanınca gider. Bildirim ve mesajlar değer veya tam yol taşımaz.
+- Düzenleme yazması atomiktir: aynı klasörde 0600 geçici dosya, özgün izinle `rename`. Dosya açıldıktan sonra değiştiyse kayıt reddedilir. Nöbet yedek tutmaz.
 
 ## Bilinen sınırlar
 
