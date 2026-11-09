@@ -246,3 +246,141 @@ struct SBOMFilterTests {
         #expect(!filter.cleared().isActive)
     }
 }
+
+struct OSVDetailTests {
+    private let advisory = """
+    {"id":"GHSA-1","database_specific":{"severity":"HIGH"},
+     "affected":[
+       {"package":{"name":"a","ecosystem":"npm"},"ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.2.3"}]}]},
+       {"package":{"name":"other","ecosystem":"npm"},"ranges":[{"events":[{"fixed":"9.9"}]}]}]}
+    """
+
+    @Test func advisoryGivesRatingAndFixPerPackage() throws {
+        let detail = try #require(OSVClient.parseDetail(Data(advisory.utf8)))
+        #expect(detail.id == "GHSA-1")
+        #expect(detail.rating == .high)
+        #expect(detail.fixedVersions(for: "a") == ["1.2.3"])
+        #expect(detail.fixedVersions(for: "other") == ["9.9"])
+        #expect(detail.fixedVersions(for: "yok").isEmpty)
+    }
+
+    @Test func missingSeverityIsUnknownAndBrokenJsonIsNil() throws {
+        let detail = try #require(OSVClient.parseDetail(Data(#"{"id":"CVE-1"}"#.utf8)))
+        #expect(detail.rating == .unknown)
+        #expect(OSVClient.parseDetail(Data("bozuk".utf8)) == nil)
+    }
+
+    @Test func ratingNamesMapToAlertSeverity() {
+        #expect(VulnDetail.Rating(osv: "CRITICAL") == .critical)
+        #expect(VulnDetail.Rating(osv: "moderate") == .moderate)
+        #expect(VulnDetail.Rating.critical.alertSeverity == .high)
+        #expect(VulnDetail.Rating.high.alertSeverity == .high)
+        #expect(VulnDetail.Rating.moderate.alertSeverity == .medium)
+        #expect(VulnDetail.Rating.unknown.alertSeverity == .medium)
+    }
+
+    @Test func detailRequestsAreCapped() {
+        let ids = (0..<120).map { "GHSA-\($0)" }
+        #expect(OSVClient.detailTargets(ids + ids).count == OSVClient.detailLimit)
+    }
+}
+
+struct SBOMWatchTests {
+    private final class Stub: VulnLookup, @unchecked Sendable {
+        var table: [String: [String]] = [:]
+        var detailTable: [String: VulnDetail] = [:]
+        var fail = false
+        var calls = 0
+        func lookup(_ components: [SBOMComponent]) async -> [SBOMComponent: [String]]? {
+            calls += 1
+            if fail { return nil }
+            var result: [SBOMComponent: [String]] = [:]
+            for item in components { if let ids = table[item.name] { result[item] = ids } }
+            return result
+        }
+        func details(_ ids: [String]) async -> [String: VulnDetail] { detailTable.filter { ids.contains($0.key) } }
+    }
+
+    private static let a = SBOMComponent(ecosystem: .npm, name: "a", version: "1")
+    private static let b = SBOMComponent(ecosystem: .npm, name: "b", version: "1")
+
+    @MainActor private func make(_ stub: Stub, enabled: Bool = true) -> (SBOMModel, UserDefaults) {
+        let name = "nobet-sbom-watch-\(UUID().uuidString)"
+        let defaults = TestDefaults.make(name)
+        defaults.removePersistentDomain(forName: name)
+        defaults.set(enabled, forKey: SBOMModel.lookupKey)
+        return (SBOMModel(defaults: defaults, lookup: stub), defaults)
+    }
+
+    @Test @MainActor func firstScanLearnsSilentlyThenOnlyNewAdvisoriesAreMarked() async {
+        let stub = Stub()
+        stub.table = ["a": ["CVE-1"]]
+        let (model, _) = make(stub)
+        await model.apply(components: [Self.a, Self.b])
+        #expect(model.newlyVulnerable.isEmpty)
+
+        stub.table = ["a": ["CVE-1"], "b": ["CVE-2"]]
+        await model.apply(components: [Self.a, Self.b])
+        #expect(model.newlyVulnerable == [Self.b])
+
+        await model.apply(components: [Self.a, Self.b])
+        #expect(model.newlyVulnerable.isEmpty)
+    }
+
+    @Test @MainActor func failedLookupKeepsKnownSetSoNothingIsFalselyNew() async {
+        let stub = Stub()
+        stub.table = ["a": ["CVE-1"]]
+        let (model, _) = make(stub)
+        await model.apply(components: [Self.a])
+        stub.fail = true
+        await model.apply(components: [Self.a])
+        stub.fail = false
+        await model.apply(components: [Self.a])
+        #expect(model.newlyVulnerable.isEmpty)
+    }
+
+    @Test @MainActor func knownSetStoresDigestsOnly() async {
+        let stub = Stub()
+        stub.table = ["secret-internal-pkg": ["CVE-1"]]
+        let (model, defaults) = make(stub)
+        await model.apply(components: [SBOMComponent(ecosystem: .npm, name: "secret-internal-pkg", version: "7.7.7")])
+        let stored = defaults.stringArray(forKey: SBOMModel.knownKey) ?? []
+        #expect(stored.count == 1)
+        #expect(!stored.joined().contains("secret-internal-pkg"))
+    }
+
+    @Test @MainActor func detailsFeedSeverityAndFixIntoAlerts() async {
+        let stub = Stub()
+        stub.table = ["a": ["GHSA-1"]]
+        stub.detailTable = ["GHSA-1": VulnDetail(id: "GHSA-1", rating: .critical, fixed: ["a": ["1.2.3"]])]
+        let (model, _) = make(stub)
+        await model.apply(components: [Self.a])
+        let issues = SBOMModel.alertIssues(model.vulnerabilities, details: model.details)
+        #expect(issues.count == 1)
+        #expect(issues[0].severity == .high)
+        #expect(issues[0].subject == "a 1 (düzeltme: 1.2.3)")
+    }
+
+    @Test func alertsWithoutDetailsStayMedium() {
+        let issues = SBOMModel.alertIssues([Self.a: ["CVE-1"]], details: [:])
+        #expect(issues[0].severity == .medium)
+        #expect(issues[0].subject == "a 1")
+    }
+
+    @Test @MainActor func backgroundRefreshNeverAsksOsvWhenLookupIsOff() async {
+        let stub = Stub()
+        let (model, _) = make(stub, enabled: false)
+        let ran = await model.refreshIfEnabled(roots: [])
+        #expect(!ran)
+        #expect(stub.calls == 0)
+    }
+
+    @Test @MainActor func backgroundRefreshRunsWhenLookupIsOn() async {
+        let stub = Stub()
+        let (model, _) = make(stub)
+        let ran = await model.refreshIfEnabled(roots: [])
+        #expect(ran)
+        #expect(stub.calls == 1)
+        #expect(model.lastChecked != nil)
+    }
+}

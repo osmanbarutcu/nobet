@@ -251,8 +251,12 @@ private struct SBOMCard: View {
             Toggle("Bilinen açıkları sorgula (OSV.dev)", isOn: Binding(get: { sbom.lookupEnabled },
                                                                      set: { sbom.setLookup($0, roots: roots) }))
                 .toggleStyle(RightSwitchStyle()).controlSize(.small)
-            Text("Açık sorgusu açıkken yalnızca ekosistem, paket adı ve sürüm internete gider. Dosya yolu ve içerik gitmez. Swift paketleri sorgulanmaz.")
+            Text("Açık sorgusu açıkken ekosistem, paket adı ve sürüm internete gider. Önem derecesi için açık kimliği de gider (en çok 50). Dosya yolu ve içerik gitmez. Nöbet açıkken 6 saatte bir kendiliğinden tarar. Swift paketleri sorgulanmaz.")
                 .font(.nobetFootnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if let checked = sbom.lastChecked {
+                Text("Son açık sorgusu: \(checked.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.nobetFootnote).foregroundStyle(.secondary)
+            }
             if sbom.lookupFailed {
                 Text("Açık sorgusu yanıt vermedi. Önceki sonuç gösteriliyor.").font(.caption).foregroundStyle(.orange)
             }
@@ -269,9 +273,12 @@ private struct SBOMCard: View {
                             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                                 .accessibilityLabel("Açığı var")
                             Text(verbatim: "\(item.name) \(item.version)")
+                            if sbom.newlyVulnerable.contains(item) {
+                                Text("Yeni").font(.nobetFootnote.weight(.semibold)).foregroundStyle(.red)
+                            }
                             Spacer()
-                            Text(verbatim: ids.prefix(3).joined(separator: ", ") + (ids.count > 3 ? " +\(ids.count - 3)" : ""))
-                                .font(.nobetFootnote).foregroundStyle(.secondary).lineLimit(1)
+                            Text(verbatim: vulnerabilityLine(item, ids: ids))
+                                .font(.nobetFootnote).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                         } else {
                             Text(verbatim: "\(item.name) \(item.version)")
                             Spacer()
@@ -291,6 +298,14 @@ private struct SBOMCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
         .onAppear { if !sbom.scanned && !sbom.scanning { sbom.rescan(roots: roots) } }
+    }
+
+    private func vulnerabilityLine(_ item: SBOMComponent, ids: [String]) -> String {
+        let summary = SBOMModel.summary(of: item, ids: ids, details: sbom.details)
+        var parts = [summary.rating.label].filter { !$0.isEmpty }
+        if !summary.fixes.isEmpty { parts.append("düzeltme: " + summary.fixes.joined(separator: ", ")) }
+        parts.append(ids.prefix(3).joined(separator: ", ") + (ids.count > 3 ? " +\(ids.count - 3)" : ""))
+        return parts.joined(separator: " · ")
     }
 
     private var filterRow: some View {

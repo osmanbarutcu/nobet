@@ -22,6 +22,7 @@ struct NobetApp: App {
         DevModel.shared.startPolling()
         SecretsModel.shared.startPolling()
         NetworkModel.shared.startPolling()
+        SBOMModel.shared.startWatching { DevModel.shared.overview.projects.compactMap(\.root) + SecretsModel.shared.folders }
     }
 
     var body: some Scene {
