@@ -32,6 +32,8 @@ final class RemoteModel: ObservableObject {
     private var lastUptime: [String: Int] = [:]
     private let historyFile: HistoryFile<MetricSample>?
     private var polling: Task<Void, Never>?
+    /// Sunucu başına otomatik yoklama bekleme durumu. Yalnızca bellekte durur.
+    private var backoff: [String: PollBackoff] = [:]
     /// İstek üzerine okunan paket listeleri. Yalnızca bellekte durur.
     @Published private(set) var inventory: [String: [InstalledPackage]] = [:]
     @Published private(set) var inventoryErrors: [String: String] = [:]
@@ -139,6 +141,7 @@ final class RemoteModel: ObservableObject {
         var nextResults = results
         nextResults[id] = nil
         results = nextResults
+        backoff[id] = nil
         save(next)
         publishAlerts()
         refresh()
@@ -165,6 +168,7 @@ final class RemoteModel: ObservableObject {
         reboots[profile.id] = nil
         responseMs[profile.id] = nil
         lastUptime[profile.id] = nil
+        backoff[profile.id] = nil
         var next = results
         next[profile.id] = nil
         results = next
@@ -175,11 +179,22 @@ final class RemoteModel: ObservableObject {
     }
 
     /// Tüm sunucuları paralel okur. Parola eksikse bağlanmadan hata verir.
-    func checkAll() async {
+    /// `respectingBackoff` açıkken bekleme süresi dolmamış veya kimlik hatası almış sunucuya bağlanılmaz, önceki sonuç kalır.
+    /// Kapalıyken (elle yenileme) bekleme durumu sıfırlanır ve her sunucu denenir.
+    func checkAll(respectingBackoff: Bool = false) async {
         let targets = profiles
         var jobs: [(SSHProfile, String?)] = []
         var fresh: [String: Result<RemoteMetrics, SSHFailure>] = [:]
+        let checkTime = now()
         for profile in targets {
+            if respectingBackoff {
+                if backoff[profile.id]?.shouldSkip(now: checkTime) == true {
+                    if let previous = results[profile.id] { fresh[profile.id] = previous }
+                    continue
+                }
+            } else {
+                backoff[profile.id] = nil
+            }
             if profile.auth == .password {
                 let stored = (try? secrets.get(account: profile.id)) ?? nil
                 guard let stored, let password = String(data: stored, encoding: .utf8) else {
@@ -205,7 +220,10 @@ final class RemoteModel: ObservableObject {
             for await item in group { all.append(item) }
             return all
         }
-        let collected = Dictionary(uniqueKeysWithValues: timed.map { ($0.0, $0.1) })
+        var collected: [String: Result<RemoteMetrics, SSHFailure>] = [:]
+        for (id, result, _) in timed {
+            collected[id] = recordBackoff(id: id, result: result, at: checkTime)
+        }
         var times = responseMs.filter { id, _ in targets.contains { $0.id == id } }
         for (id, result, ms) in timed {
             if case .success = result { times[id] = ms } else { times[id] = nil }
@@ -218,6 +236,21 @@ final class RemoteModel: ObservableObject {
         recordHistory(fresh, live: live)
         checked = true
         publishAlerts()
+    }
+
+    /// Okuma sonucunu bekleme durumuna işler. Kimlik hatasının metnine yoklamanın durduğunu ekler.
+    private func recordBackoff(id: String, result: Result<RemoteMetrics, SSHFailure>, at time: Date) -> Result<RemoteMetrics, SSHFailure> {
+        var state = backoff[id] ?? PollBackoff()
+        defer { backoff[id] = state }
+        switch result {
+        case .success:
+            state.recordSuccess()
+            return result
+        case .failure(let failure):
+            state.recordFailure(failure, now: time)
+            guard failure.authentication else { return result }
+            return .failure(SSHFailure(message: failure.message + " Yoklama durdu. Yenile düğmesiyle yeniden deneyin.", authentication: true))
+        }
     }
 
     /// Seçilen sunucunun paket listesini okur. Yalnızca kullanıcı isteğiyle çalışır.
@@ -246,11 +279,12 @@ final class RemoteModel: ObservableObject {
         }
     }
 
-    func refresh() {
+    /// Elle yenileme bekleme durumunu sıfırlar. Otomatik yoklama `respectingBackoff: true` ile çağırır.
+    func refresh(respectingBackoff: Bool = false) {
         guard !checking else { return }
         checking = true
         Task {
-            await checkAll()
+            await checkAll(respectingBackoff: respectingBackoff)
             checking = false
         }
     }
@@ -260,7 +294,7 @@ final class RemoteModel: ObservableObject {
         guard polling == nil else { return }
         polling = Task { [weak self] in
             while !Task.isCancelled {
-                self?.refresh()
+                self?.refresh(respectingBackoff: true)
                 try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
             }
         }

@@ -2,6 +2,8 @@ import Foundation
 
 struct SSHFailure: Error, Equatable {
     let message: String
+    /// Sunucu kimliği reddetti. Aynı kimlikle yeniden denemek fail2ban veya hesap kilidi tetikleyebilir.
+    var authentication = false
 }
 
 protocol RemoteCollecting: Sendable {
@@ -41,7 +43,11 @@ struct SSHRunner: RemoteCollecting {
     }
 
     static func interpret(status: Int32, stdout: String, stderr: String, windows: Bool = false) -> Result<RemoteMetrics, SSHFailure> {
-        guard status == 0 else { return .failure(SSHFailure(message: SSHError.describe(status: status, output: stderr + "\n" + stdout))) }
+        guard status == 0 else {
+            let output = stderr + "\n" + stdout
+            return .failure(SSHFailure(message: SSHError.describe(status: status, output: output),
+                                       authentication: output.lowercased().contains("permission denied")))
+        }
         guard let metrics = windows ? WindowsParser.metrics(from: stdout) : LinuxParser.metrics(from: stdout) else {
             return .failure(SSHFailure(message: windows
                 ? "Beklenmeyen çıktı. Sunucuda OpenSSH ve PowerShell çalışmıyor olabilir."
@@ -75,7 +81,9 @@ struct SSHRunner: RemoteCollecting {
     }
 
     /// Sabit bir komutu tek `ssh` sürecinde çalıştırır. Zaman aşımında süreci sonlandırır.
-    static func execute(_ profile: SSHProfile, password: String?, command: String) -> Result<CommandOutput, SSHFailure> {
+    /// `sshPath` ve `timeout` yalnızca testlerde değişir. Gerçek uygulama varsayılanları kullanır.
+    static func execute(_ profile: SSHProfile, password: String?, command: String,
+                        sshPath: String = SSHRunner.sshPath, timeout: TimeInterval = SSHRunner.timeout) -> Result<CommandOutput, SSHFailure> {
         guard let askpass = Bundle.main.executablePath else { return .failure(SSHFailure(message: "Uygulama yolu bulunamadı.")) }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: sshPath)
@@ -94,7 +102,8 @@ struct SSHRunner: RemoteCollecting {
         let errBox = DataBox()
         let group = DispatchGroup()
         group.enter()
-        DispatchQueue.global().async {
+        // Ayrı iş parçacığı: paylaşımlı GCD havuzu doluysa stderr okunmaz ve ssh yazarken kilitlenir.
+        Thread.detachNewThread {
             errBox.data = err.fileHandleForReading.readDataToEndOfFile()
             group.leave()
         }

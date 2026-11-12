@@ -73,7 +73,7 @@ final class UpdateModel: ObservableObject {
 
     /// 30 dakikada bir bakar. İstek yalnızca son denetimden 24 saat geçtiyse gider.
     func startPolling() {
-        guard polling == nil else { return }
+        guard polling == nil, !DemoMode.isOn else { return }
         polling = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.checkIfDue()

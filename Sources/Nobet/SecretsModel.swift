@@ -6,6 +6,8 @@ final class SecretsModel: ObservableObject {
     static let shared = SecretsModel(nobet: .shared, alerts: .shared, autoRescan: true)
 
     static let foldersKey = "secrets.extraFolders"
+    /// Kaynak koddaki jeton taraması. Çok dosya okuduğu için varsayılan kapalıdır.
+    static let scanSourceKey = "secrets.scanSource"
     /// Yok sayılan bulguların özeti (`tür|yol özeti`). Yol diske yazılmaz.
     static let ignoredKey = "secrets.ignored"
     nonisolated static let scanTimeLimit: TimeInterval = 20
@@ -14,6 +16,9 @@ final class SecretsModel: ObservableObject {
     @Published private(set) var ignoredFindings: [SecretFinding] = []
     private var latest: [SecretFinding] = []
     private var ignored: Set<String>
+    /// `~/.ssh` içindeki özel anahtarlar. Bulgu sayılmaz, uyarı üretmez.
+    @Published private(set) var sshKeys: [SSHKeyInfo] = []
+    @Published private(set) var scanSource: Bool
     @Published private(set) var scanning = false
     @Published private(set) var scanned = false
     @Published private(set) var folders: [String]
@@ -37,6 +42,14 @@ final class SecretsModel: ObservableObject {
         self.home = home
         folders = defaults.stringArray(forKey: Self.foldersKey) ?? []
         ignored = Set(defaults.stringArray(forKey: Self.ignoredKey) ?? [])
+        scanSource = defaults.bool(forKey: Self.scanSourceKey)
+    }
+
+    func setScanSource(_ enabled: Bool) {
+        guard enabled != scanSource else { return }
+        scanSource = enabled
+        defaults.set(enabled, forKey: Self.scanSourceKey)
+        rescan()
     }
 
     private static func ignoreKey(_ finding: SecretFinding) -> String {
@@ -84,16 +97,21 @@ final class SecretsModel: ObservableObject {
         return parent.isEmpty || parent == "/" ? name : "\(parent)/\(name)"
     }
 
+    func applyKeys(_ keys: [SSHKeyInfo]) { sshKeys = keys }
+
     func rescan() {
         guard !scanning else { return }
         scanning = true
         let roots = roots
         let home = home
+        let scanSource = scanSource
         Task {
-            let next = await Task.detached(priority: .utility) {
-                SecretScanner.scan(roots: roots, home: home, git: SystemGit(), deadline: Date().addingTimeInterval(Self.scanTimeLimit))
+            let (next, keys) = await Task.detached(priority: .utility) {
+                (SecretScanner.scan(roots: roots, home: home, git: SystemGit(), deadline: Date().addingTimeInterval(Self.scanTimeLimit), scanSource: scanSource),
+                 SecretScanner.sshKeys(home: home))
             }.value
             apply(next)
+            applyKeys(keys)
             scanning = false
         }
     }

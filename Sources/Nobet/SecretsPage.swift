@@ -4,6 +4,7 @@ import SwiftUI
 /// `@State` bu araç zincirinde derlenmez. Bu yüzden sheet durumu küçük bir nesnede durur.
 private final class SecretsPageState: ObservableObject {
     @Published var editing: SecretFinding?
+    @Published var query = ""
 }
 
 /// Sır tarayıcı: yerel dosyalardaki riskli izinleri ve açıkta kalan sırları listeler.
@@ -15,18 +16,24 @@ struct SecretsPage: View {
     var body: some View {
         PageContainer {
                 header
+                searchField
+                if !shownKeys.isEmpty { keysCard }
                 foldersCard
-                if model.scanned && model.findings.isEmpty {
+                if isSearching && shownKeys.isEmpty && shownFindings.isEmpty && shownIgnored.isEmpty {
+                    EmptyState(symbol: "magnifyingglass", title: "Eşleşme yok",
+                               message: "\"\(state.query)\" için bulgu veya SSH anahtarı bulunamadı. Başka bir sözcük deneyin.")
+                }
+                if !isSearching && model.scanned && model.findings.isEmpty {
                     EmptyState(symbol: "checkmark.shield", title: "Bulgu yok",
                                message: "Taranan yerlerde riskli dosya bulunamadı. Başka bir klasörü taramak için Klasör ekle düğmesini kullanın.")
                 }
-                ForEach(model.findings) { finding in
+                ForEach(shownFindings) { finding in
                     FindingCard(finding: finding, actionTitle: "Yok say", action: { model.ignore(finding) },
                                 onEdit: SecretEditor.canEdit(finding) ? { state.editing = finding } : nil)
                 }
-                if !model.ignoredFindings.isEmpty {
-                    Text("Yok sayılanlar (\(model.ignoredFindings.count))").font(.callout.weight(.medium)).padding(.top, 8)
-                    ForEach(model.ignoredFindings) { finding in
+                if !shownIgnored.isEmpty {
+                    Text("Yok sayılanlar (\(shownIgnored.count))").font(.callout.weight(.medium)).padding(.top, 8)
+                    ForEach(shownIgnored) { finding in
                         FindingCard(finding: finding, actionTitle: "Geri al") { model.unignore(finding) }
                             .opacity(0.6)
                     }
@@ -41,6 +48,43 @@ struct SecretsPage: View {
                 state.editing = nil
             }
         }
+    }
+
+    private var isSearching: Bool { !state.query.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var shownFindings: [SecretFinding] { model.findings.filter { SecretSearch.matches($0, query: state.query) } }
+    private var shownIgnored: [SecretFinding] { model.ignoredFindings.filter { SecretSearch.matches($0, query: state.query) } }
+    private var shownKeys: [SSHKeyInfo] { model.sshKeys.filter { SecretSearch.matches($0, query: state.query) } }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("Ara: dosya adı, yol, ssh, anahtar", text: $state.query)
+                .textFieldStyle(.plain)
+                .accessibilityLabel("Sırlarda ara")
+            if isSearching {
+                Button { state.query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Aramayı temizle")
+                    .accessibilityLabel("Aramayı temizle")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
+
+    private var keysCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CardHeader(symbol: "key.horizontal", title: "SSH anahtarları", trailing: "\(shownKeys.count)")
+            Text("~/.ssh içindeki özel anahtar dosyaları. Nöbet içeriği okumaz, yalnızca yolu gösterir.")
+                .font(.nobetFootnote)
+                .foregroundStyle(.secondary)
+            ForEach(shownKeys) { key in SSHKeyRow(key: key) }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
     }
 
     private var header: some View {
@@ -96,6 +140,15 @@ struct SecretsPage: View {
             Button("Klasör ekle…") { chooseFolder() }
                 .glassButton()
                 .controlSize(.small)
+            Toggle(isOn: Binding(get: { model.scanSource }, set: { model.setScanSource($0) })) {
+                Text("Kaynak kodda jeton ara").font(.callout)
+            }
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            Text("Kod ve yapılandırma dosyalarında GitHub, AWS, Stripe gibi bilinen jeton biçimlerini arar. Dosyalar yalnızca okunur. Jeton değeri gösterilmez. Çok dosya okuduğu için varsayılan kapalıdır.")
+                .font(.nobetFootnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             if let error = model.errorText {
                 Text(error).font(.caption).foregroundStyle(.orange)
             }
@@ -120,6 +173,51 @@ struct SecretsPage: View {
 /// `@State` bu araç zincirinde derlenmez. Bu yüzden kopyalama bayrağı küçük bir nesnede durur.
 private final class CopyFlag: ObservableObject {
     @Published var done = false
+}
+
+private struct SSHKeyRow: View {
+    let key: SSHKeyInfo
+    @StateObject private var copy = CopyFlag()
+    @StateObject private var copyPublic = CopyFlag()
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: key.name).font(.callout.weight(.medium))
+                Text(verbatim: (key.path as NSString).abbreviatingWithTildeInPath)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(verbatim: "\(key.isEncrypted ? "parolalı" : "parolasız") · izin \(FileMode.octal(key.mode))\(key.isLoose ? " (gevşek)" : "")")
+                    .font(.nobetFootnote)
+                    .foregroundStyle(key.isLoose ? .orange : .secondary)
+            }
+            Spacer(minLength: 6)
+            if let publicKey = PublicKey.load(forKeyAt: key.path) {
+                Button(copyPublic.done ? "Kopyalandı" : "Açık anahtarı kopyala") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(publicKey, forType: .string)
+                    copyPublic.done = true
+                }
+                .glassButton()
+                .controlSize(.small)
+                .help("Sunucuya eklemek için .pub dosyasının içeriğini kopyalar")
+            }
+            Button(copy.done ? "Kopyalandı" : "Yolu kopyala") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(key.path, forType: .string)
+                copy.done = true
+            }
+            .glassButton()
+            .controlSize(.small)
+            Button { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: key.path)]) } label: { Image(systemName: "folder") }
+                .glassButton()
+                .controlSize(.small)
+                .help("Finder'da göster")
+                .accessibilityLabel("\(key.name) dosyasını Finder'da göster")
+        }
+    }
 }
 
 private struct FindingCard: View {

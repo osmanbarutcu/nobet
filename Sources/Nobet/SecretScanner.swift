@@ -17,6 +17,12 @@ enum FileWalker {
 
     /// `maxDepth`: kökten sayılan klasör derinliği. Kökteki dosya derinlik 1'dedir.
     static func envFiles(under root: String, maxDepth: Int, maxEntries: Int, deadline: Date) -> [String] {
+        files(under: root, maxDepth: maxDepth, maxEntries: maxEntries, deadline: deadline, matching: EnvFile.isEnvFileName)
+    }
+
+    /// Ada göre süzülen dosyalar. `limit` bulunan dosya sayısını sınırlar.
+    static func files(under root: String, maxDepth: Int, maxEntries: Int, deadline: Date, limit: Int = .max,
+                      matching accept: (String) -> Bool) -> [String] {
         let url = URL(fileURLWithPath: root, isDirectory: true)
         let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey]
         guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys, options: [], errorHandler: { _, _ in true }) else {
@@ -42,7 +48,10 @@ enum FileWalker {
                 if skippedDirectories.contains(item.lastPathComponent) || enumerator.level >= maxDepth { enumerator.skipDescendants() }
                 continue
             }
-            if enumerator.level <= maxDepth, EnvFile.isEnvFileName(item.lastPathComponent) { found.append(spelled(item.path)) }
+            if enumerator.level <= maxDepth, accept(item.lastPathComponent) {
+                found.append(spelled(item.path))
+                if found.count >= limit { break }
+            }
         }
         return found
     }
@@ -100,7 +109,7 @@ enum SecretScanner {
     static let maxDepth = 6
     static let maxEntries = 300_000
 
-    static func scan(roots: [String], home: String, git: GitProbing, deadline: Date) -> [SecretFinding] {
+    static func scan(roots: [String], home: String, git: GitProbing, deadline: Date, scanSource: Bool = false) -> [SecretFinding] {
         var findings = sshFindings(home: home)
         findings += credentialFindings(home: home)
         var visited = Set<String>()
@@ -110,6 +119,7 @@ enum SecretScanner {
                 findings += envFindings(path: path, git: git)
             }
         }
+        if scanSource { findings += sourceFindings(roots: roots, deadline: deadline) }
         var unique: [String: SecretFinding] = [:]
         for finding in findings { unique[finding.id] = finding }
         return SecretFinding.sorted(Array(unique.values))
@@ -129,9 +139,9 @@ enum SecretScanner {
         return String(decoding: handle.readData(ofLength: bytes), as: UTF8.self)
     }
 
-    private static func sshFindings(home: String) -> [SecretFinding] {
+    private static func sshEntries(home: String) -> (directory: String, mode: UInt16, entries: [SSHEntry])? {
         let directory = home + "/.ssh"
-        guard let dirMode = mode(of: directory), let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return [] }
+        guard let dirMode = mode(of: directory), let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return nil }
         let entries = names.sorted().compactMap { name -> SSHEntry? in
             let path = directory + "/" + name
             guard let fileMode = mode(of: path), size(of: path) <= 32 * 1024 else { return nil }
@@ -139,7 +149,35 @@ enum SecretScanner {
             guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), !isDirectory.boolValue else { return nil }
             return SSHEntry(path: path, mode: fileMode, head: head(of: path, bytes: headBytes))
         }
-        return SSHAudit.evaluate(dirPath: directory, dirMode: dirMode, entries: entries)
+        return (directory, dirMode, entries)
+    }
+
+    private static func sshFindings(home: String) -> [SecretFinding] {
+        guard let ssh = sshEntries(home: home) else { return [] }
+        return SSHAudit.evaluate(dirPath: ssh.directory, dirMode: ssh.mode, entries: ssh.entries)
+    }
+
+    /// `~/.ssh` içindeki tüm özel anahtarlar. Yalnızca başlığa bakar, içeriği saklamaz.
+    static func sshKeys(home: String) -> [SSHKeyInfo] {
+        guard let ssh = sshEntries(home: home) else { return [] }
+        return SSHAudit.keys(entries: ssh.entries)
+    }
+
+    /// Kaynak ve yapılandırma dosyalarında gömülü jeton. İkili, büyük ve ağır klasördeki dosyalar atlanır.
+    private static func sourceFindings(roots: [String], deadline: Date) -> [SecretFinding] {
+        var findings: [SecretFinding] = []
+        var visited = Set<String>()
+        for root in roots {
+            let paths = FileWalker.files(under: root, maxDepth: maxDepth, maxEntries: maxEntries, deadline: deadline,
+                                         limit: SourceLeak.maxFiles, matching: SourceLeak.isScannable)
+            for path in paths where visited.insert(path).inserted {
+                if Date() >= deadline { return findings }
+                guard size(of: path) <= SourceLeak.maxFileBytes, let data = FileManager.default.contents(atPath: path),
+                      !data.contains(0) else { continue }
+                if let finding = SourceLeak.finding(path: path, text: String(decoding: data, as: UTF8.self)) { findings.append(finding) }
+            }
+        }
+        return findings
     }
 
     private static func credentialFindings(home: String) -> [SecretFinding] {

@@ -36,6 +36,7 @@ enum SecretKind: String, CaseIterable {
     case credentialWorldReadable
     case plaintextCredentialStore
     case credentialFile
+    case sourceToken
 
     var title: String {
         switch self {
@@ -49,6 +50,7 @@ enum SecretKind: String, CaseIterable {
         case .credentialWorldReadable: return "Kimlik bilgisi dosyası başkalarınca okunur"
         case .plaintextCredentialStore: return "Düz metin kimlik bilgisi dosyası"
         case .credentialFile: return "Kimlik bilgisi dosyası"
+        case .sourceToken: return "Kaynak kodda jeton var"
         }
     }
 }
@@ -77,7 +79,7 @@ struct SecretFinding: Identifiable, Equatable {
             return "echo \(Self.shellQuoted(name)) >> \(Self.shellQuoted(directory + "/.gitignore"))"
         case .unencryptedPrivateKey:
             return "ssh-keygen -p -f \(Self.shellQuoted(path))"
-        case .credentialFile, .plaintextCredentialStore, .envInHistory:
+        case .credentialFile, .plaintextCredentialStore, .envInHistory, .sourceToken:
             return nil
         }
     }
@@ -85,6 +87,9 @@ struct SecretFinding: Identifiable, Equatable {
     /// Sır başkalarının eline geçmiş olabilirse sağlayıcıda yenileme önerisi. Uygulama bunu kendisi yapmaz.
     var rotationAdvice: String? {
         var parts: [String] = []
+        if kind == .sourceToken {
+            parts.append("Jeton kaynak kodda durur. Kodu paylaştıysanız sırrı sağlayıcıda yenileyin ve kodda ortam değişkenine taşıyın.")
+        }
         if kind == .envTracked || kind == .envInHistory {
             parts.append("Dosya git geçmişinde kaldı. Dosyayı silmek yetmez, sırları sağlayıcıda yenileyin.")
         }
@@ -232,7 +237,67 @@ struct SSHEntry {
     let head: String
 }
 
+/// `~/.ssh` altındaki bir özel anahtar. Bulgu değildir: izni doğru ve parolalı anahtar da listelenir. İçerik tutulmaz.
+struct SSHKeyInfo: Identifiable, Equatable {
+    let path: String
+    let mode: UInt16
+    let isEncrypted: Bool
+
+    var id: String { path }
+    var name: String { (path as NSString).lastPathComponent }
+    var isLoose: Bool { FileMode.isGroupOrWorldAccessible(mode) }
+}
+
+/// `.pub` dosyasından kopyalanacak açık anahtar satırı. Yalnızca tek satırlık, tanınan türde bir açık anahtar kabul edilir.
+/// Dosyada özel anahtar veya başka içerik varsa nil döner. Böylece yanlış adlandırılmış bir dosya panoya sızmaz.
+enum PublicKey {
+    private static let types = ["ssh-ed25519", "ssh-rsa", "ssh-dss", "ecdsa-sha2-", "sk-ssh-ed25519@openssh.com", "sk-ecdsa-sha2-"]
+    static let maxBytes = 8 * 1_024
+
+    static func line(from text: String) -> String? {
+        guard !text.contains("PRIVATE KEY") else { return nil }
+        let lines = text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard lines.count == 1, let line = lines.first, types.contains(where: { line.hasPrefix($0) }),
+              line.split(separator: " ").count >= 2 else { return nil }
+        return line
+    }
+
+    /// Anahtar dosyasının yanındaki `.pub` dosyasını okur. Dosya yoksa, büyükse veya açık anahtar değilse nil döner.
+    static func load(forKeyAt path: String) -> String? {
+        let publicPath = path + ".pub"
+        guard let size = (try? FileManager.default.attributesOfItem(atPath: publicPath))?[.size] as? NSNumber, size.intValue <= maxBytes,
+              let data = FileManager.default.contents(atPath: publicPath) else { return nil }
+        return line(from: String(decoding: data, as: UTF8.self))
+    }
+}
+
+/// Sırlar sayfasındaki arama. Her sözcük küçük harf ve aksan farkı gözetmeden aranır.
+enum SecretSearch {
+    static func matches(_ finding: SecretFinding, query: String) -> Bool {
+        matches(haystack: [finding.kind.title, finding.path, finding.detail], query: query)
+    }
+
+    static func matches(_ key: SSHKeyInfo, query: String) -> Bool {
+        matches(haystack: [key.path, "ssh key anahtar özel anahtar", key.isEncrypted ? "parolalı" : "parolasız", "izin \(FileMode.octal(key.mode))"],
+                query: query)
+    }
+
+    private static func matches(haystack: [String], query: String) -> Bool {
+        let words = AlertFilter.fold(query).split(whereSeparator: \.isWhitespace)
+        guard !words.isEmpty else { return true }
+        let text = AlertFilter.fold(haystack.joined(separator: " "))
+        return words.allSatisfy { text.contains($0) }
+    }
+}
+
 enum SSHAudit {
+    /// Özel anahtar dosyaları. İzin ve parola durumuna bakılmaksızın hepsi döner.
+    static func keys(entries: [SSHEntry]) -> [SSHKeyInfo] {
+        entries.compactMap { entry in
+            PrivateKey.inspect(entry.head).map { SSHKeyInfo(path: entry.path, mode: entry.mode, isEncrypted: $0.isEncrypted) }
+        }
+    }
+
     static func evaluate(dirPath: String, dirMode: UInt16, entries: [SSHEntry]) -> [SecretFinding] {
         var findings: [SecretFinding] = []
         if FileMode.isGroupOrWorldAccessible(dirMode) {
